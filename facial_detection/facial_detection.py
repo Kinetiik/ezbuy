@@ -1,15 +1,22 @@
 from flask import Flask, render_template, Response
 import cv2
 import face_recognition
+import apriltag
 import os
 
 app = Flask(__name__)
 
+# Initialize the webcam
+cap = cv2.VideoCapture(0)
+
+# Initialize the AprilTag detector
+tag_detector = apriltag.Detector()
+
 # Load reference images
 current_dir = os.path.dirname(os.path.abspath(__file__))
 reference_images = {
-    "You": os.path.join(current_dir, "reference_images", "fynn.jpg"),
-    "Friend": os.path.join(current_dir, "reference_images", "flo.jpg")
+    "Fynn": os.path.join(current_dir, "reference_images", "fynn.jpg"),
+    "Flo": os.path.join(current_dir, "reference_images", "flo.jpg")
 }
 
 # Verify reference images exist
@@ -28,9 +35,8 @@ for name, path in reference_images.items():
     known_face_encodings.append(encoding)
     known_face_names.append(name)
 
-# Initialize webcam
-cap = cv2.VideoCapture(0)
 
+# Frame generator
 def generate_frames():
     while True:
         ret, frame = cap.read()
@@ -40,7 +46,7 @@ def generate_frames():
         # Resize frame for faster processing
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
 
-        # Find face locations and encodings
+        # === Face Recognition ===
         face_locations = face_recognition.face_locations(small_frame)
         face_encodings = face_recognition.face_encodings(small_frame, face_locations)
 
@@ -62,18 +68,33 @@ def generate_frames():
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
             cv2.putText(frame, name, (left + 6, bottom - 6), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+        # === AprilTag Detection ===
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        tags = tag_detector.detect(gray)
+
+        for tag in tags:
+            corners = tag.corners.astype(int)
+            cv2.polylines(frame, [corners], True, (255, 0, 0), 2)
+            tag_id_text = f"ID: {tag.tag_id}"
+            cv2.putText(frame, tag_id_text, tuple(corners[0]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+        # Encode frame as JPEG
         _, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
         yield (b'--frame\r\n'
             b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
+
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
 if __name__ == '__main__':
     import sys
