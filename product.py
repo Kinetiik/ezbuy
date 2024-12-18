@@ -7,6 +7,7 @@ cap = cv2.VideoCapture(0)
 # Initialize the AprilTag detector
 detector = apriltag.Detector()
 
+
 while True:
     # Read a frame from the webcam
     ret, frame = cap.read()
