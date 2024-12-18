@@ -1,89 +1,136 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>QR Code Scanner</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
-        }
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
 
-        video {
-            width: 80%;
-            max-width: 600px;
-            border: 2px solid #ccc;
-            border-radius: 10px;
-            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-            margin-top: 50px;
-        }
+      video {
+        width: 80%;
+        max-width: 600px;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        margin-top: 50px;
+      }
 
-        canvas {
-            display: none;
-        }
+      canvas {
+        display: none;
+      }
 
-        .message {
-            margin-top: 20px;
-            font-size: 24px;
-            color: green;
+      .message {
+        margin-top: 20px;
+        font-size: 24px;
+        color: green;
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .message.show {
+        visibility: visible;
+        opacity: 1;
+        animation: fadeOut 2s ease-in-out forwards;
+      }
+
+      @keyframes fadeOut {
+        0% {
+          opacity: 1;
+          transform: translateY(0);
         }
+        100% {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>EZBuy Login</h1>
     <h3>Please scan your EZBuy ID to enter the store!</h3>
     <video autoplay muted id="camera-stream"></video>
     <canvas id="canvas"></canvas>
-    <div class="message" id="message"></div>
+    <div class="message" id="message">Login complete</div>
 
-    <!-- Load jsQR library -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
     <script>
-        const videoElement = document.getElementById('camera-stream');
-        const canvas = document.getElementById('canvas');
-        const canvasContext = canvas.getContext('2d');
-        const messageElement = document.getElementById('message');
+      const videoElement = document.getElementById("camera-stream");
+      const canvas = document.getElementById("canvas");
+      const canvasContext = canvas.getContext("2d");
+      const messageElement = document.getElementById("message");
 
-        // Start the camera stream
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then((stream) => {
-                videoElement.srcObject = stream;
-                videoElement.setAttribute('playsinline', true); // Required for iOS
-                videoElement.play();
-                requestAnimationFrame(scanQRCode);
-            })
-            .catch((error) => {
-                console.error('Error accessing camera:', error);
-                alert('Unable to access the camera. Please check your permissions.');
-            });
+      let loggedIn = false;
 
-        // Function to scan QR code from the camera feed
-        function scanQRCode() {
-            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                canvas.width = videoElement.videoWidth;
-                canvas.height = videoElement.videoHeight;
-                canvasContext.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      // Start the camera stream
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((stream) => {
+          videoElement.srcObject = stream;
+          videoElement.setAttribute("playsinline", true);
+          videoElement.play();
+          requestAnimationFrame(scanQRCode);
+        })
+        .catch((error) => {
+          console.error("Error accessing camera:", error);
+          alert("Unable to access the camera. Please check your permissions.");
+        });
 
-                // Get image data from the canvas
-                const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, canvas.width, canvas.height, {
-                    inversionAttempts: "dontInvert",
-                });
-
-                if (code) {
-                    messageElement.textContent = "Login complete";
-                    messageElement.style.color = "green";
-                } else {
-                    messageElement.textContent = ""; // Clear the message if no QR code is detected
-                }
-            }
-            requestAnimationFrame(scanQRCode);
+      // Function to scan QR code from the camera feed
+      function scanQRCode() {
+        if (loggedIn) {
+          requestAnimationFrame(scanQRCode);
+          return;
         }
+
+        if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+          canvas.width = videoElement.videoWidth;
+          canvas.height = videoElement.videoHeight;
+          canvasContext.drawImage(
+            videoElement,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+          const imageData = canvasContext.getImageData(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+          const code = jsQR(imageData.data, canvas.width, canvas.height, {
+            inversionAttempts: "dontInvert",
+          });
+
+          if (code) {
+            triggerAnimation();
+          }
+        }
+        requestAnimationFrame(scanQRCode);
+      }
+
+      // Trigger animation and reset after 3 seconds
+      function triggerAnimation() {
+        loggedIn = true;
+        messageElement.classList.add("show");
+
+        setTimeout(() => {
+          messageElement.classList.remove("show");
+          loggedIn = false;
+        }, 3000);
+      }
     </script>
-    <h5>This service is collecting information about you. To get more information about our use of your data visit ezbuy.com/data</h5>
-</body>
+    <h5>
+      This service is collecting information about you. To get more information
+      about our use of your data visit ezbuy.com/data
+    </h5>
+  </body>
 </html>
