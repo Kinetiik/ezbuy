@@ -1,8 +1,9 @@
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, Response, jsonify
 import cv2
 import face_recognition
 import apriltag
 import os
+import threading
 
 app = Flask(__name__)
 
@@ -35,9 +36,14 @@ for name, path in reference_images.items():
     known_face_encodings.append(encoding)
     known_face_names.append(name)
 
+# Shared data for detected items
+detected_items = set()
+lock = threading.Lock()
 
 # Frame generator
 def generate_frames():
+    global detected_items
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -45,6 +51,8 @@ def generate_frames():
 
         # Resize frame for faster processing
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+
+        current_detected = set()
 
         # === Face Recognition ===
         face_locations = face_recognition.face_locations(small_frame)
@@ -72,12 +80,25 @@ def generate_frames():
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         tags = tag_detector.detect(gray)
 
+        id_to_name = {
+            0: "Item 1",
+            1: "Item 2"
+        }
+
         for tag in tags:
             corners = tag.corners.astype(int)
             cv2.polylines(frame, [corners], True, (255, 0, 0), 2)
-            tag_id_text = f"ID: {tag.tag_id}"
+            tag_id_text = id_to_name[tag.tag_id] if tag.tag_id in id_to_name else f"Tag ID: {tag.tag_id}"
             cv2.putText(frame, tag_id_text, tuple(corners[0]),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+            # Add to detected items
+            if tag.tag_id in id_to_name:
+                current_detected.add(id_to_name[tag.tag_id])
+
+        # Update global detected items
+        with lock:
+            detected_items = current_detected
 
         # Encode frame as JPEG
         _, buffer = cv2.imencode('.jpg', frame)
@@ -94,6 +115,12 @@ def index():
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/detected_items')
+def get_detected_items():
+    with lock:
+        return jsonify(list(detected_items))
 
 
 if __name__ == '__main__':
